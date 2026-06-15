@@ -34,6 +34,7 @@ input[type=file] { display: none; }
 .gi.dark { background: #1B3A5C; }
 .gi.dark .lbl { color: #C9A84C; }
 .gi.dark .val { color: #C9A84C; }
+.log { margin-top: 10px; font-size: 11px; color: #718096; line-height: 1.6; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(29,78,216,0.3); border-top-color: #1D4ED8; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
 </style>
@@ -42,15 +43,15 @@ input[type=file] { display: none; }
 <div class="card">
   <div class="logo">Jonitaco Holdings Group</div>
   <h1>PD_Assets</h1>
-  <p class="subtitle">Wgraj zaktualizowany plik Excel — aplikacja mobilna odświeży się automatycznie.</p>
+  <p class="subtitle">Wgraj zaktualizowany plik Excel — aplikacja mobilna odswiezy sie automatycznie.</p>
   <div class="drop-zone" id="dz">
     <div class="icon">📊</div>
-    <div class="main-text">Przeciągnij plik Excel tutaj</div>
-    <div class="sub-text">lub kliknij aby wybrać plik (.xlsx)</div>
+    <div class="main-text">Przeciagnij plik Excel tutaj</div>
+    <div class="sub-text">lub kliknij aby wybrac plik (.xlsx)</div>
   </div>
   <input type="file" id="fi" accept=".xlsx">
   <div class="file-info" id="finfo"><span>📄</span><span id="fname"></span></div>
-  <button class="btn" id="btn" disabled>Wgraj i zaktualizuj bazę</button>
+  <button class="btn" id="btn" disabled>Wgraj i zaktualizuj baze</button>
   <div class="status" id="st"></div>
 </div>
 <script>
@@ -72,16 +73,9 @@ dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
 dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f) setFile(f); });
 fi.addEventListener('change', () => { if (fi.files[0]) setFile(fi.files[0]); });
 
-function setFile(f) {
-  file = f;
-  fname.textContent = f.name;
-  finfo.style.display = 'flex';
-  btn.disabled = false;
-  st.style.display = 'none';
-  console.log('Plik wybrany:', f.name, 'XLSX dostępny:', typeof XLSX !== 'undefined');
-}
+function setFile(f) { file = f; fname.textContent = f.name; finfo.style.display = 'flex'; btn.disabled = false; st.style.display = 'none'; }
 
-function fmt(n) { return n ? new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 0 }).format(n) + ' PLN' : '—'; }
+function fmtPLN(n) { return n ? Math.round(n).toLocaleString('pl-PL') + ' PLN' : '—'; }
 function round2(n) { return Math.round(n * 100) / 100; }
 
 function parseDate(v) {
@@ -92,7 +86,6 @@ function parseDate(v) {
   if (m1) return m1[3] + '-' + m1[2].padStart(2,'0') + '-' + m1[1].padStart(2,'0');
   const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m2) return m2[1] + '-' + m2[2] + '-' + m2[3];
-  // Excel serial date
   if (typeof v === 'number') {
     const d = new Date(Math.round((v - 25569) * 86400 * 1000));
     return d.toISOString().split('T')[0];
@@ -102,31 +95,30 @@ function parseDate(v) {
 
 btn.addEventListener('click', async () => {
   if (!file) return;
-  console.log('Kliknięto Wgraj, XLSX:', typeof XLSX);
   btn.disabled = true;
   st.className = 'status loading';
   st.innerHTML = '<span class="spinner"></span> Parsowanie pliku Excel...';
   try {
     const data = await parseExcel(file);
-    console.log('Sparsowano:', data.dr, 'gotówka:', data.historia.gotowka_pln);
     st.innerHTML = '<span class="spinner"></span> Zapisywanie do bazy danych...';
-    await saveToDB(data);
+    const log = await saveToDB(data);
     const h = data.historia;
     st.className = 'status success';
-    st.innerHTML = '<div class="big">✅ Zaktualizowano!</div>' +
-      '<div>Raport: <strong>' + data.dr + '</strong></div>' +
+    st.innerHTML = '<div class="big">Zaktualizowano!</div>' +
+      '<div>Raport biezacy: <strong>' + data.dr + '</strong></div>' +
       '<div class="grid">' +
-      '<div class="gi"><div class="lbl">Gotówka</div><div class="val">' + fmt(h.gotowka_pln) + '</div></div>' +
-      '<div class="gi"><div class="lbl">Nieruchomości</div><div class="val">' + fmt(h.nieruchomosci_pln) + '</div></div>' +
-      '<div class="gi"><div class="lbl">Udziały</div><div class="val">' + fmt(h.udzialy_pln) + '</div></div>' +
-      '<div class="gi"><div class="lbl">Pożyczki</div><div class="val">' + fmt(h.pozyczki_pln) + '</div></div>' +
-      '<div class="gi"><div class="lbl">Zobowiązania</div><div class="val">' + fmt(h.zobowiazania_pln) + '</div></div>' +
-      '<div class="gi dark"><div class="lbl">Aktywa netto</div><div class="val">' + fmt(h.aktywa_netto_pln) + '</div></div>' +
-      '</div><div style="margin-top:10px;font-size:12px;color:#718096">Otwórz aplikację i przeciągnij w dół aby odświeżyć.</div>';
+      '<div class="gi"><div class="lbl">Gotowka</div><div class="val">' + fmtPLN(h.gotowka_pln) + '</div></div>' +
+      '<div class="gi"><div class="lbl">Nieruchomosci</div><div class="val">' + fmtPLN(h.nieruchomosci_pln) + '</div></div>' +
+      '<div class="gi"><div class="lbl">Udzialy</div><div class="val">' + fmtPLN(h.udzialy_pln) + '</div></div>' +
+      '<div class="gi"><div class="lbl">Pozyczki</div><div class="val">' + fmtPLN(h.pozyczki_pln) + '</div></div>' +
+      '<div class="gi"><div class="lbl">Zobowiazania</div><div class="val">' + fmtPLN(h.zobowiazania_pln) + '</div></div>' +
+      '<div class="gi dark"><div class="lbl">Aktywa netto</div><div class="val">' + fmtPLN(h.aktywa_netto_pln) + '</div></div>' +
+      '</div>' +
+      '<div class="log">' + log + '</div>';
   } catch(e) {
-    console.error('Błąd:', e);
+    console.error(e);
     st.className = 'status error';
-    st.innerHTML = '<div class="big">❌ Błąd</div><div>' + e.message + '</div>';
+    st.innerHTML = '<div class="big">Blad</div><div>' + e.message + '</div>';
     btn.disabled = false;
   }
 });
@@ -134,20 +126,19 @@ btn.addEventListener('click', async () => {
 async function parseExcel(file) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: true });
-  console.log('Arkusze:', wb.SheetNames);
+
+  // ── ZAKŁADKA RAPORT ──────────────────────────────────────
   const ws = wb.Sheets['Raport'];
-  if (!ws) throw new Error('Brak arkusza Raport w pliku');
+  if (!ws) throw new Error('Brak arkusza Raport');
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-  console.log('Wiersze:', rows.length, 'B3:', rows[2]?.[1]);
 
   const dr = parseDate(rows[2]?.[1]);
-  if (!dr) throw new Error('Brak daty raportu w komórce B3. Wartość: ' + rows[2]?.[1]);
+  if (!dr) throw new Error('Brak daty raportu w komorce B3');
 
   const kEUR = parseFloat(rows[5]?.[1]) || 4.25;
   const kUSD = parseFloat(rows[5]?.[3]) || 3.65;
   const kGBP = parseFloat(rows[5]?.[5]) || 4.90;
   const gk = w => ({ PLN:1, EUR:kEUR, USD:kUSD, GBP:kGBP }[w] || 1);
-  console.log('Kursy:', kEUR, kUSD, kGBP);
 
   const gotowka = [];
   for (let i = 9; i <= 42; i++) {
@@ -166,7 +157,7 @@ async function parseExcel(file) {
   for (let i = 47; i <= 61; i++) {
     const r = rows[i]; if (!r) continue;
     const nazwa = r[0]?.toString().trim();
-    if (!nazwa || nazwa === 'Nieruchomość' || nazwa.startsWith('RAZEM')) continue;
+    if (!nazwa || nazwa === 'Nieruchomosc' || nazwa === 'Nieruchomość' || nazwa.startsWith('RAZEM')) continue;
     const wycena_pln = parseFloat(r[1]);
     if (!wycena_pln) continue;
     nieruchomosci.push({ data_raportu: dr, nazwa, wycena_pln, data_wyceny: parseDate(r[2]), uwagi: r[3]?.toString() || null });
@@ -176,7 +167,7 @@ async function parseExcel(file) {
   for (let i = 66; i <= 68; i++) {
     const r = rows[i]; if (!r) continue;
     const nazwa = r[0]?.toString().trim();
-    if (!nazwa || nazwa.startsWith('RAZEM') || nazwa === 'Projekt / Spółka') continue;
+    if (!nazwa || nazwa.startsWith('RAZEM') || nazwa === 'Projekt / Spolka' || nazwa === 'Projekt / Spółka') continue;
     const wycena_pln = parseFloat(r[1]);
     if (!wycena_pln) continue;
     udzialy.push({ data_raportu: dr, nazwa, wycena_pln, data_wyceny: parseDate(r[2]), uwagi: r[3]?.toString() || null });
@@ -186,7 +177,7 @@ async function parseExcel(file) {
   for (let i = 73; i <= 74; i++) {
     const r = rows[i]; if (!r) continue;
     const nazwa = r[0]?.toString().trim();
-    if (!nazwa || nazwa.startsWith('RAZEM') || nazwa === 'Pożyczkobiorca') continue;
+    if (!nazwa || nazwa.startsWith('RAZEM') || nazwa === 'Pozyczkobiorca' || nazwa === 'Pożyczkobiorca') continue;
     const kwota_pln = parseFloat(r[1]);
     if (!kwota_pln) continue;
     pozyczki.push({ data_raportu: dr, nazwa, kwota_pln });
@@ -213,28 +204,76 @@ async function parseExcel(file) {
   const razem_pln = round2(gotowka_pln + nieruchomosci_pln + udzialy_pln + pozyczki_pln);
   const aktywa_netto_pln = round2(razem_pln - zobowiazania_pln);
 
-  console.log('Gotówka:', gotowka_pln, '| Nier:', nieruchomosci_pln, '| Razem:', razem_pln, '| Netto:', aktywa_netto_pln);
+  const historia = { data_raportu: dr, gotowka_pln, nieruchomosci_pln, udzialy_pln, pozyczki_pln, zobowiazania_pln, aktywa_netto_pln, razem_pln };
 
-  return { dr, historia: { data_raportu: dr, gotowka_pln, nieruchomosci_pln, udzialy_pln, pozyczki_pln, zobowiazania_pln, aktywa_netto_pln, razem_pln }, gotowka, nieruchomosci, udzialy, pozyczki, zobowiazania };
+  // ── ZAKŁADKA HISTORIA ────────────────────────────────────
+  const wh = wb.Sheets['Historia'];
+  const historiaRows = wh ? XLSX.utils.sheet_to_json(wh, { header: 1, defval: null, raw: true }) : [];
+
+  const historiaWiersze = [];
+  for (let i = 4; i < historiaRows.length; i++) {
+    const r = historiaRows[i];
+    if (!r || !r[0]) continue;
+    const dataR = parseDate(r[0]);
+    if (!dataR) continue;
+    const got = parseFloat(r[1]) || 0;
+    const nier = parseFloat(r[2]) || 0;
+    const udz = parseFloat(r[3]) || 0;
+    const poz = parseFloat(r[4]) || 0;
+    const razem = parseFloat(r[5]) || round2(got + nier + udz + poz);
+    const nota = r[6]?.toString() || null;
+    const zob = parseFloat(r[7]) || 0;
+    const netto = parseFloat(r[8]) || round2(razem - zob);
+    historiaWiersze.push({
+      data_raportu: dataR,
+      gotowka_pln: round2(got),
+      nieruchomosci_pln: round2(nier),
+      udzialy_pln: round2(udz),
+      pozyczki_pln: round2(poz),
+      razem_pln: round2(razem),
+      zobowiazania_pln: round2(zob),
+      aktywa_netto_pln: round2(netto),
+    });
+  }
+
+  return { dr, historia, historiaWiersze, gotowka, nieruchomosci, udzialy, pozyczki, zobowiazania };
 }
 
-async function saveToDB({ dr, historia, gotowka, nieruchomosci, udzialy, pozyczki, zobowiazania }) {
-  const tables = [
+async function saveToDB({ dr, historia, historiaWiersze, gotowka, nieruchomosci, udzialy, pozyczki, zobowiazania }) {
+  const logs = [];
+
+  // Dane szczegolowe biezacego raportu — nadpisz
+  const tabele = [
     ['gotowka', gotowka],
     ['nieruchomosci', nieruchomosci],
     ['udzialy', udzialy],
     ['pozyczki_udzielone', pozyczki],
     ['zobowiazania', zobowiazania],
-    ['historia_raportow', [historia]]
   ];
-  for (const [table, rows] of tables) {
-    console.log('Zapisuję:', table, rows.length, 'wierszy');
+  for (const [table, rows] of tabele) {
     await fetch(SB_URL + '/rest/v1/' + table + '?data_raportu=eq.' + dr, { method: 'DELETE', headers: H });
     if (rows.length > 0) {
       const r = await fetch(SB_URL + '/rest/v1/' + table, { method: 'POST', headers: H, body: JSON.stringify(rows) });
-      if (!r.ok) { const e = await r.text(); throw new Error('Błąd zapisu ' + table + ': ' + e); }
+      if (!r.ok) { const e = await r.text(); throw new Error('Blad zapisu ' + table + ': ' + e); }
     }
+    logs.push(table + ': ' + rows.length + ' poz.');
   }
+
+  // Historia — pobierz istniejace daty, wstaw tylko nowe
+  const existResp = await fetch(SB_URL + '/rest/v1/historia_raportow?select=data_raportu', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } });
+  const existData = await existResp.json();
+  const existDates = new Set((existData || []).map(r => r.data_raportu));
+
+  const nowe = historiaWiersze.filter(r => !existDates.has(r.data_raportu));
+  if (nowe.length > 0) {
+    const r = await fetch(SB_URL + '/rest/v1/historia_raportow', { method: 'POST', headers: H, body: JSON.stringify(nowe) });
+    if (!r.ok) { const e = await r.text(); throw new Error('Blad zapisu historia: ' + e); }
+    logs.push('Historia: +' + nowe.length + ' nowych raportow');
+  } else {
+    logs.push('Historia: brak nowych raportow do dodania');
+  }
+
+  return logs.join(' | ');
 }
 </script>
 </body>
