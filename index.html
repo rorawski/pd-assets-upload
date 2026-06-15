@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PD_Assets — Upload</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; background: #F4F6F9; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.card { background: white; border-radius: 20px; padding: 48px 40px; max-width: 520px; width: 100%; box-shadow: 0 4px 24px rgba(27,58,92,0.10); }
+.logo { font-size: 12px; font-weight: 700; color: #C9A84C; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+h1 { font-size: 26px; font-weight: 800; color: #1B3A5C; margin-bottom: 6px; }
+.subtitle { font-size: 14px; color: #718096; margin-bottom: 36px; }
+.drop-zone { border: 2px dashed #CBD5E0; border-radius: 14px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s; background: #F8FAFC; margin-bottom: 16px; }
+.drop-zone:hover, .drop-zone.drag-over { border-color: #C9A84C; background: #FFFBEB; }
+.drop-zone .icon { font-size: 48px; margin-bottom: 12px; }
+.drop-zone .main-text { font-size: 16px; font-weight: 600; color: #1B3A5C; margin-bottom: 6px; }
+.drop-zone .sub-text { font-size: 13px; color: #A0AEC0; }
+input[type=file] { display: none; }
+.file-info { display: none; align-items: center; gap: 10px; padding: 12px 16px; background: #F0FDF4; border-radius: 10px; margin-bottom: 16px; font-size: 14px; font-weight: 600; color: #1B3A5C; }
+.btn { width: 100%; padding: 16px; background: #1B3A5C; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+.btn:hover { background: #243F66; }
+.btn:disabled { background: #A0AEC0; cursor: not-allowed; }
+.status { margin-top: 20px; padding: 16px 20px; border-radius: 10px; font-size: 14px; font-weight: 500; display: none; }
+.status.loading { background: #EFF6FF; color: #1D4ED8; display: block; }
+.status.success { background: #F0FDF4; color: #15803D; display: block; }
+.status.error { background: #FEF2F2; color: #DC2626; display: block; }
+.big { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.gi { background: rgba(255,255,255,0.6); border-radius: 8px; padding: 10px 12px; }
+.gi .lbl { font-size: 11px; color: #718096; margin-bottom: 2px; }
+.gi .val { font-size: 14px; font-weight: 700; color: #1B3A5C; }
+.gi.dark { background: #1B3A5C; }
+.gi.dark .lbl { color: #C9A84C; }
+.gi.dark .val { color: #C9A84C; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(29,78,216,0.3); border-top-color: #1D4ED8; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">Jonitaco Holdings Group</div>
+  <h1>PD_Assets</h1>
+  <p class="subtitle">Wgraj zaktualizowany plik Excel — aplikacja mobilna odświeży się automatycznie.</p>
+  <div class="drop-zone" id="dz">
+    <div class="icon">📊</div>
+    <div class="main-text">Przeciągnij plik Excel tutaj</div>
+    <div class="sub-text">lub kliknij aby wybrać plik (.xlsx)</div>
+  </div>
+  <input type="file" id="fi" accept=".xlsx">
+  <div class="file-info" id="finfo"><span>📄</span><span id="fname"></span></div>
+  <button class="btn" id="btn" disabled>Wgraj i zaktualizuj bazę</button>
+  <div class="status" id="st"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const SB_URL = "https://dbilnkmqjutqqypsuwpz.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiaWxua21xanV0cXF5cHN1d3B6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTAwOTU3MSwiZXhwIjoyMDk2NTg1NTcxfQ.akZnlHvXQZkqFJfw-dskzvc_BAhfjI6jIh4tpy-Ixs4";
+const H = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+
+const dz = document.getElementById('dz');
+const fi = document.getElementById('fi');
+const btn = document.getElementById('btn');
+const finfo = document.getElementById('finfo');
+const fname = document.getElementById('fname');
+const st = document.getElementById('st');
+let file = null;
+
+dz.addEventListener('click', () => fi.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f && f.name.endsWith('.xlsx')) setFile(f); });
+fi.addEventListener('change', () => { if (fi.files[0]) setFile(fi.files[0]); });
+
+function setFile(f) { file = f; fname.textContent = f.name; finfo.style.display = 'flex'; btn.disabled = false; st.style.display = 'none'; }
+
+function fmt(n) { return n ? new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 0 }).format(n) + ' PLN' : '—'; }
+function round2(n) { return Math.round(n * 100) / 100; }
+function parseDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v.toISOString().split('T')[0];
+  const s = v.toString().trim();
+  const m1 = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m1) return m1[3] + '-' + m1[2].padStart(2,'0') + '-' + m1[1].padStart(2,'0');
+  const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) return m2[1] + '-' + m2[2] + '-' + m2[3];
+  return null;
+}
+
+btn.addEventListener('click', async () => {
+  if (!file) return;
+  btn.disabled = true;
+  st.className = 'status loading';
+  st.innerHTML = '<span class="spinner"></span> Parsowanie pliku Excel...';
+  try {
+    const data = await parseExcel(file);
+    st.innerHTML = '<span class="spinner"></span> Zapisywanie do bazy danych...';
+    await saveToDB(data);
+    const h = data.historia;
+    st.className = 'status success';
+    st.innerHTML = '<div class="big">Zaktualizowano!</div><div>Raport: <strong>' + data.dr + '</strong></div>' +
+      '<div class="grid">' +
+      '<div class="gi"><div class="lbl">Gotowka</div><div class="val">' + fmt(h.gotowka_pln) + '</div></div>' +
+      '<div class="gi"><div class="lbl">Nieruchomosci</div><div class="val">' + fmt(h.nieruchomosci_pln) + '</div></div>' +
+      '<div class="gi"><div class="lbl">Udzialy</div><div class="val">' + fmt(h.udzialy_pln) + '</div></div>' +
+      '<div class="gi"><div class="lbl">Pozyczki</div><div class="val">' + fmt(h.pozyczki_pln) + '</div></div>' +
+      '<div class="gi"><div class="lbl">Zobowiazania</div><div class="val">' + fmt(h.zobowiazania_pln) + '</div></div>' +
+      '<div class="gi dark"><div class="lbl">Aktywa netto</div><div class="val">' + fmt(h.aktywa_netto_pln) + '</div></div>' +
+      '</div><div style="margin-top:10px;font-size:12px;color:#718096">Otworz aplikacje i przeciagnij w dol aby odswiezyc.</div>';
+  } catch(e) {
+    st.className = 'status error';
+    st.innerHTML = '<div class="big">Blad</div><div>' + e.message + '</div>';
+    btn.disabled = false;
+  }
+});
+
+async function parseExcel(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const ws = wb.Sheets['Raport'];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+
+  const dr = parseDate(rows[2]?.[1]);
+  if (!dr) throw new Error('Brak daty raportu w komorce B3');
+
+  const kEUR = parseFloat(rows[5]?.[1]) || 4.25;
+  const kUSD = parseFloat(rows[5]?.[3]) || 3.65;
+  const kGBP = parseFloat(rows[5]?.[5]) || 4.90;
+  const gk = w => ({ PLN:1, EUR:kEUR, USD:kUSD, GBP:kGBP }[w] || 1);
+
+  const gotowka = [];
+  for (let i = 9; i <= 42; i++) {
+    const r = rows[i]; if (!r) continue;
+    const firma = r[0]?.toString().trim();
+    if (!firma || firma.startsWith('RAZEM') || firma === 'Firma / Podmiot') continue;
+    const waluta = r[1]?.toString().trim() || 'PLN';
+    const kwota = parseFloat(r[2]);
+    if (!kwota || kwota === 0) continue;
+    const kurs = parseFloat(r[3]) || gk(waluta);
+    const wartosc_pln = round2(parseFloat(r[4]) || kwota * kurs);
+    gotowka.push({ data_raportu: dr, firma, waluta, kwota, kurs, wartosc_pln });
+  }
+
+  const nieruchomosci = [];
+  for (let i = 47; i <= 61; i++) {
+    const r = rows[i]; if (!r) continue;
+    const nazwa = r[0]?.toString().trim();
+    if (!nazwa || nazwa === 'Nieruchomość' || nazwa.startsWith('RAZEM')) continue;
+    const wycena_pln = parseFloat(r[1]);
+    if (!wycena_pln) continue;
+    nieruchomosci.push({ data_raportu: dr, nazwa, wycena_pln, data_wyceny: parseDate(r[2]), uwagi: r[3]?.toString() || null });
+  }
+
+  const udzialy = [];
+  for (let i = 66; i <= 68; i++) {
+    const r = rows[i]; if (!r) continue;
+    const nazwa = r[0]?.toString().trim();
+    if (!nazwa || nazwa === 'Projekt / Spolka' || nazwa.startsWith('RAZEM')) continue;
+    const wycena_pln = parseFloat(r[1]);
+    if (!wycena_pln) continue;
+    udzialy.push({ data_raportu: dr, nazwa, wycena_pln, data_wyceny: parseDate(r[2]), uwagi: r[3]?.toString() || null });
+  }
+
+  const pozyczki = [];
+  for (let i = 73; i <= 74; i++) {
+    const r = rows[i]; if (!r) continue;
+    const nazwa = r[0]?.toString().trim();
+    if (!nazwa || nazwa === 'Pozyczkobiorca' || nazwa.startsWith('RAZEM')) continue;
+    const kwota_pln = parseFloat(r[1]);
+    if (!kwota_pln) continue;
+    pozyczki.push({ data_raportu: dr, nazwa, kwota_pln });
+  }
+
+  const zobowiazania = [];
+  for (let i = 82; i <= 86; i++) {
+    const r = rows[i]; if (!r) continue;
+    const wierzyciel = r[0]?.toString().trim();
+    if (!wierzyciel || wierzyciel === 'Wierzyciel / opis' || wierzyciel.startsWith('RAZEM')) continue;
+    const waluta = r[1]?.toString().trim() || 'PLN';
+    const kwota = parseFloat(r[2]);
+    if (!kwota || kwota === 0) continue;
+    const kurs = parseFloat(r[3]) || gk(waluta);
+    const wartosc_pln = round2(parseFloat(r[4]) || kwota * kurs);
+    zobowiazania.push({ data_raportu: dr, wierzyciel, waluta, kwota, kurs, wartosc_pln });
+  }
+
+  const gotowka_pln = round2(gotowka.reduce((s,r) => s + r.wartosc_pln, 0));
+  const nieruchomosci_pln = round2(nieruchomosci.reduce((s,r) => s + r.wycena_pln, 0));
+  const udzialy_pln = round2(udzialy.reduce((s,r) => s + r.wycena_pln, 0));
+  const pozyczki_pln = round2(pozyczki.reduce((s,r) => s + r.kwota_pln, 0));
+  const zobowiazania_pln = round2(zobowiazania.reduce((s,r) => s + r.wartosc_pln, 0));
+  const razem_pln = round2(gotowka_pln + nieruchomosci_pln + udzialy_pln + pozyczki_pln);
+  const aktywa_netto_pln = round2(razem_pln - zobowiazania_pln);
+
+  return { dr, historia: { data_raportu: dr, gotowka_pln, nieruchomosci_pln, udzialy_pln, pozyczki_pln, zobowiazania_pln, aktywa_netto_pln, razem_pln }, gotowka, nieruchomosci, udzialy, pozyczki, zobowiazania };
+}
+
+async function saveToDB({ dr, historia, gotowka, nieruchomosci, udzialy, pozyczki, zobowiazania }) {
+  const tables = [['gotowka', gotowka], ['nieruchomosci', nieruchomosci], ['udzialy', udzialy], ['pozyczki_udzielone', pozyczki], ['zobowiazania', zobowiazania], ['historia_raportow', [historia]]];
+  for (const [table, rows] of tables) {
+    await fetch(SB_URL + '/rest/v1/' + table + '?data_raportu=eq.' + dr, { method: 'DELETE', headers: H });
+    if (rows.length > 0) {
+      const r = await fetch(SB_URL + '/rest/v1/' + table, { method: 'POST', headers: H, body: JSON.stringify(rows) });
+      if (!r.ok) { const e = await r.text(); throw new Error('Blad zapisu ' + table + ': ' + e); }
+    }
+  }
+}
+</script>
+</body>
+</html>
